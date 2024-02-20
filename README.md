@@ -11,5 +11,5 @@ To condense the articles by retrieving top k segments, you will need to run the 
 ```
 python articles/retrieve.py --topk 30 --min_similarity 0.55
 ```
---topk: specifies the number of top retrieved segments.
+--topk: specifies the number of top retrieved segments. \
 --min_similarity: specifies the similarity threshold for retrieving segments.
