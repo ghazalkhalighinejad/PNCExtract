@@ -11,7 +11,7 @@ import logging
 os.environ['TFHUB_CACHE_DIR'] = 'tfhub_cache'
 
 parser = argparse.ArgumentParser(description='Generate a prompt for a given paper and table.')
-parser.add_argument('--max_tokens', type=int, default=500)
+parser.add_argument('--max_tokens', type=int, default=50)
 parser.add_argument('--min_similarity', type=float, default=0.55)
 parser.add_argument('--topk', type=int, default=30)
 
