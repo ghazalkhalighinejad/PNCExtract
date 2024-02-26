@@ -14,453 +14,189 @@ parser.add_argument('--pred_json', type=str, help='Path to the paper file.')
 args = parser.parse_args()
 
 def scores(correct, false_positive, false_negative):
-    
-    # compute f1
-    if correct + false_positive == 0:
-        precision = 0
-    else:
-        precision = correct / (correct + false_positive)
-    if correct + false_negative == 0:
-        recall = 0
-    else:
-        recall = correct / (correct + false_negative)
-
-    if precision + recall == 0:
-        f1 = 0
-    else:
-        f1 = 2 * precision * recall / (precision + recall)
-
+    precision = correct / (correct + false_positive) if correct + false_positive > 0 else 0
+    recall = correct / (correct + false_negative) if correct + false_negative > 0 else 0
+    f1 = 2 * precision * recall / (precision + recall) if precision + recall > 0 else 0
     return f1, precision, recall
 
-
 def exact_match_entities(pred_entity, true_entity, true_entity_abbr):
-    pred_entity = pred_entity.lower().replace(" ", "").replace("-", "")
-    true_entity = true_entity.lower().replace(" ", "").replace("-", "")
-    
-    pred_entity = ''.join(e for e in pred_entity if e.isalnum())
-    true_entity = ''.join(e for e in true_entity if e.isalnum())
-
-    if pred_entity.endswith("s") and not true_entity.endswith("s"):
-        pred_entity = pred_entity[:-1]
-    if true_entity.endswith("s") and not pred_entity.endswith("s"):
-        true_entity = true_entity[:-1]
-
-    if true_entity_abbr != None:
-        # consider them to be equal if there's s in the end of one but not the other
-        true_entity_abbr = true_entity_abbr.lower().replace(" ", "").replace("-", "")
-        true_entity_abbr = ''.join(e for e in true_entity_abbr if e.isalnum())
-
-    return  (pred_entity == true_entity) or (pred_entity == true_entity_abbr)
+    sanitize = lambda s: ''.join(e for e in s.lower().replace(" ", "").replace("-", "") if e.isalnum()).rstrip('s')
+    pred_entity, true_entity = map(sanitize, [pred_entity, true_entity])
+    true_entity_abbr = sanitize(true_entity_abbr) if true_entity_abbr else true_entity_abbr
+    return pred_entity == true_entity or pred_entity == true_entity_abbr
 
 def get_f1(sample, true_json, logger, log_details=False):
-
-
-    f1 = 0
-    correct = 0
-    false_positive = 0
-    false_negative = 0
-
-    exact_match = 0
-    total = 0
-
+    f1 = correct = false_positive = false_negative = exact_match = total = 0
+    log_this_sample = False
+    counters = {
+        "corrects": {"matrix chemical name": 0, "filler chemical name": 0, "composition": 0},
+        "false_negatives": {"matrix chemical name": 0, "filler chemical name": 0, "composition": 0},
+        "false_positives": {"matrix chemical name": 0, "filler chemical name": 0, "composition": 0},
+    }
     standardize_pred_sample = sample.copy()
 
-    log_this_sample = False
+    def process_entity(entity_key, entity_type):
+        nonlocal log_this_sample, correct, false_positive, false_negative
+        pred = sample.get(entity_key, None)
+        pred = None if pred == "null" else pred
+        true = true_json.get(entity_key, None)
+        true_abbr = true_json.get(f"{entity_key.split()[0]} Abbreviation", None)
 
-    false_negatives = {"matrix chemical name": 0, "filler chemical name": 0, "composition": 0}
-    false_positives = {"matrix chemical name": 0, "filler chemical name": 0, "composition": 0}
-    corrects = {"matrix chemical name": 0, "filler chemical name": 0, "composition": 0}
-
-    try:
-        pred_chemname = sample["Matrix Chemical Name"]
-    except KeyError:
-        pred_chemname = None
-    try:
-        pred_chemname_abbr = sample["Matrix Chemical Abbreviation"]
-    except KeyError:
-        pred_chemname_abbr = None
-    try:
-        pred_chemname_abbr = sample["Matrix Abbreviation"]
-    except KeyError:
-        pass
-    true_chemname = true_json["Matrix Chemical Name"]
-    true_chemname_abbr = true_json["Matrix Abbreviation"]
-
-    if pred_chemname == "null":
-        pred_chemname = None
-    if pred_chemname_abbr == "null":
-        pred_chemname_abbr = None
-
-    # make sure pred_chemname is not a list
-    if pred_chemname != None and true_chemname != None:
-        
-        if exact_match_entities(pred_chemname, true_chemname, true_chemname_abbr):
+        if pred and true and (exact_match_entities(pred, true, true_abbr) or exact_match_entities(standardize(pred), true, true_abbr)):
+            counters["corrects"][entity_type] += 1
             correct += 1
-            corrects["matrix chemical name"] += 1
             if log_details:
-                exact_match +=1 
-        else:
-            before_pred_chemname = pred_chemname
-            # standardize pred_chemname
-            pred_chemname = standardize(pred_chemname)
-            standardize_pred_sample["Matrix Chemical Name"] = pred_chemname
-            if exact_match_entities(pred_chemname, true_chemname, true_chemname_abbr):
-                correct += 1
-                corrects["matrix chemical name"] += 1
-                if log_details:
-                    exact_match +=1
-            else:
-                if log_details:
-                    log_this_sample = True
+                exact_match += 1
+        elif pred or true:
+            counters["false_negatives" if not pred else "false_positives"][entity_type] += 1
+            false_negative += not pred
+            false_positive += not true
+            log_this_sample = log_details
 
-                false_positive += 1
-                false_negative += 1
-                false_positives["matrix chemical name"] += 1
-                false_negatives["matrix chemical name"] += 1
+    for entity, entity_type in [("Matrix Chemical Name", "matrix chemical name"), ("Filler Chemical Name", "filler chemical name")]:
+        process_entity(entity, entity_type)
 
+    pred_composition, true_composition = [sample.get(key, None) for key in ["Filler Composition Mass", "Filler Composition Volume"]]
+    pred_composition = None if pred_composition in ["null", "None"] else pred_composition
+    true_composition = true_json.get("Filler Composition Mass") or true_json.get("Filler Composition Volume")
+
+    if pred_composition and true_composition and process_composition(pred_composition, true_composition):
+        counters["corrects"]["composition"] += 1
+        correct += 1
         if log_details:
-            total +=1
-    else: 
-        if log_details:
-            log_this_sample = True
-        false_negative += 1
-        false_negatives["matrix chemical name"] += 1
-    
+            exact_match += 1
+    elif pred_composition or true_composition:
+        counters["false_negatives" if not pred_composition else "false_positives"]["composition"] += 1
+        false_negative += not pred_composition
+        false_positive += not true_composition
+        log_this_sample = log_details
 
-    try:
-        pred_filler_chemname = sample["Filler Chemical Name"]
-    except KeyError:
-        pred_filler_chemname = None
-    true_filler_chemname = true_json["Filler Chemical Name"]
-    true_filler_chemname_abbr = true_json["Filler Abbreviation"]
-
-    if pred_filler_chemname == "null":
-        pred_filler_chemname = None
-    
-    if pred_filler_chemname != None and true_filler_chemname != None:
-        if exact_match_entities(pred_filler_chemname, true_filler_chemname, true_filler_chemname_abbr):
-            correct += 1
-            corrects["filler chemical name"] += 1
-            if log_details:
-                exact_match +=1
-        else:
-            before_pred_filler_chemname = pred_filler_chemname
-            pred_filler_chemname = standardize(pred_filler_chemname, filler = True)
-            standardize_pred_sample["Filler Chemical Name"] = pred_filler_chemname
-            if exact_match_entities(pred_filler_chemname, true_filler_chemname, true_filler_chemname_abbr):
-                correct += 1
-                corrects["filler chemical name"] += 1
-                if log_details:
-                    exact_match +=1
-            else:
-                if log_details:
-                    log_this_sample = True
-
-                false_positive += 1
-                false_negative += 1
-                false_negatives["filler chemical name"] += 1
-                false_positives["filler chemical name"] += 1
-            
-        if log_details:
-            total +=1
-    elif pred_filler_chemname == None and true_filler_chemname != None:
-        if log_details:
-            log_this_sample = True
-        false_negative += 1
-        false_negatives["filler chemical name"] += 1
-        
-    elif pred_filler_chemname != None and true_filler_chemname == None:
-        if log_details:
-            log_this_sample = True
-        
-        false_positive += 1
-        false_positives["filler chemical name"] += 1
-
-    pred_mass = str(sample["Filler Composition Mass"])
-    if pred_mass == "null" or pred_mass == "None":
-        pred_mass = None
-    true_mass = true_json["Filler Composition Mass"]
-
-    pred_vol = str(sample["Filler Composition Volume"])
-    if pred_vol == "null" or pred_vol == "None":
-        pred_vol = None
-    true_vol = true_json["Filler Composition Volume"]
-
-    # true_composition is either the mass or the volume; whichever is not null
-    true_composition = true_mass if true_mass != None else true_vol
-    pred_composition = pred_mass if pred_mass != None else pred_vol
-
-    if pred_composition == None and true_composition == None:
-        pass
-    elif pred_composition != None and true_composition != None:
-        if pred_composition == true_composition:
-            correct += 1
-            corrects["composition"] += 1
-            if log_details:
-                exact_match +=1
-        
-        elif any(char.isdigit() for char in pred_composition):
-            # get rid of the non digits except for .
-            vol = pred_composition
-            pred_composition = ''.join(e for e in pred_composition if e.isdigit() or e == '.')
-            
-            try:
-                pred_composition = float(pred_composition)
-                if "%" in vol:
-                    pred_composition = pred_composition / 100
-            except:
-                pass
-            try:
-                true_composition = float(true_composition)
-            except:
-                pass
-            if pred_composition == true_composition:
-                correct += 1
-                corrects["composition"] += 1
-                if log_details:
-                    exact_match +=1
-            else:
-                if log_details:
-                    log_this_sample = True
-
-                false_positive += 1
-                false_negative += 1
-                false_positives["composition"] += 1
-                false_negatives["composition"] += 1
-
-        else:
-            if log_details:
-                log_this_sample = True
-
-            false_positive += 1
-            false_negative += 1
-            false_positives["composition"] += 1
-            false_negatives["composition"] += 1
-        
-        if log_details:
-            total +=1
-    
-    elif pred_composition == None and true_composition != None:
-        if log_details:
-            log_this_sample = True
-        
-        false_negative += 1
-        false_negatives["composition"] += 1
-
-    
-    elif pred_composition != None and true_composition == None:
-        if log_details:
-            log_this_sample = True
-        false_positive += 1
-        false_positives["composition"] += 1
-            
-        
-    # compute f1
     f1, precision, recall = scores(correct, false_positive, false_negative)
 
-    if log_this_sample:
-        # log the true sample and the predicted sample
+    if log_this_sample and log_details:
         logger.info("\n \n")
         logger.info(f"True sample: {true_json}")
         logger.info(f"Predicted sample: {sample}")
         logger.info(f"Standardized predicted sample: {standardize_pred_sample}")
 
-   
-    
-
-    return f1, correct, false_positive, false_negative, exact_match, total, corrects, false_negatives, false_positives
+    return f1, correct, false_positive, false_negative, exact_match, total, counters["corrects"], counters["false_negatives"], counters["false_positives"]
 
 
 if __name__ == "__main__":
     
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     logger = logging.getLogger(__name__)
-    logger.setLevel(logging.INFO)
 
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.INFO)
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
     logger.info(f"{args}")
-
-
     pred_files = os.listdir(args.pred_json)
 
-    relaxed_fp = 0
-    relaxed_fn = 0
-    relaxed_correct = 0
-
-    strict_fp = 0
-    strict_fn = 0
-    strict_correct = 0
-
-    relaxed_f1_per_article = []
-    relaxed_precision_per_article = []
-    relaxed_recall_per_article = []
-
-    strict_f1_per_article = []
-    strict_precision_per_article = []
-    strict_recall_per_article = []
-
+    # Initialize counters and lists more concisely
+    relaxed_fp = relaxed_fn = relaxed_correct = strict_fp = strict_fn = strict_correct = 0
+    relaxed_metrics = strict_metrics = {"f1": [], "precision": [], "recall": []}
     folder_to_f1 = {}
-
-    my_all_corrects = {"matrix chemical name": 0, "filler chemical name": 0, "composition": 0}
-    my_all_fns = {"matrix chemical name": 0, "filler chemical name": 0, "composition": 0}
-    my_all_fps = {"matrix chemical name": 0, "filler chemical name": 0, "composition": 0}
-
-
+    metrics_all = {key: {"correct": 0, "fn": 0, "fp": 0} for key in ["matrix chemical name", "filler chemical name", "composition"]}
 
     for pred_txt in pred_files:
-        
-        relaxed_f1_per_sample = []
-        relaxed_precision_per_sample = []
-        relaxed_recall_per_sample = []
-
-        strict_false_negatives =0
-        strict_false_positives = 0
-        strict_corrects = 0
-
-
+        relaxed_sample_metrics = {metric: [] for metric in ["f1", "precision", "recall"]}
+        strict_false_negatives = strict_false_positives = strict_corrects = 0
         is_js_scores = []
         
-        file_name = pred_txt[:4]
+        file_name, samples = pred_txt[:4], load_unique_samples_from_pred_txt(args.pred_json, pred_txt)
+        if samples is None: continue
         logger.info(f"file name: {file_name}")
-        samples = load_unique_samples_from_pred_txt(args.pred_json, pred_txt)
 
-        if samples == None:
-            continue
-
-        true_files = os.listdir("sample_data/test")
+        true_files, true_jsons = os.listdir("sample_data/test"), []
         if file_name in true_files:
             true_jsons = os.listdir(f"sample_data/test/{file_name}")
-            # if matches file exists, load it
-            
             for i, true_json in enumerate(true_jsons):
                 true_json = json.load(open(f"sample_data/test/{file_name}/{true_json}", "r"))
                 for j, sample in enumerate(samples):
                     f1, _, _, _, _, _, _, _, _ = get_f1(sample, true_json, logger)
                     is_js_scores.append([i, j, f1])
             
-            # match samples
             matches = match_samples(is_js_scores, len(true_jsons), len(samples))
-
             logger.info(f"matches: {matches}")
-            
-            matched_trues = [match[0] for match in matches]
-            matched_preds = [match[1] for match in matches]
-            for k in range(len(matched_trues)):
-                i = matched_trues[k]
-                true_json = json.load(open(f"sample_data/test/{file_name}/{true_jsons[i]}", "r"))
-                j = matched_preds[k]
-                sample = samples[j]
-                _, corrects, false_positives, false_negatives, exact_match, total, all_corrects, all_fns, all_fps = get_f1(sample, true_json, logger, log_details=True)
 
-                for key in all_corrects:
-                    my_all_corrects[key] += all_corrects[key]
-                for key in all_fns:
-                    my_all_fns[key] += all_fns[key]
-                for key in all_fps:
-                    my_all_fps[key] += all_fps[key]
+            for match in matches:
+                true_json = json.load(open(f"sample_data/test/{file_name}/{true_jsons[match[0]]}", "r"))
+                sample = samples[match[1]]
+                _, corrects, fps, fns, _, _, all_corrects, all_fns, all_fps = get_f1(sample, true_json, logger, log_details=True)
                 
-                f1, precision, recall = scores(corrects, false_positives, false_negatives)
-                relaxed_f1_per_sample.append(f1)
-                relaxed_precision_per_sample.append(precision)
-                relaxed_recall_per_sample.append(recall)
+                update_metrics(metrics_all, all_corrects, all_fns, all_fps)
+                f1, precision, recall = scores(corrects, fps, fns)
+                update_sample_metrics(relaxed_sample_metrics, f1, precision, recall)
+                update_global_metrics(corrects, fps, fns, strict_corrects, strict_false_positives, strict_false_negatives)
 
-                relaxed_correct += corrects
-                relaxed_fp += false_positives
-                relaxed_fn += false_negatives
-                
-                if false_positives + false_negatives == 0:
-                    strict_corrects += 1
+            update_article_metrics(relaxed_metrics, relaxed_sample_metrics, len(true_jsons), len(samples), matches, metrics_all, all_fns, all_fps)
 
-                    strict_correct += 1
-                else:
-                    strict_false_positives += 1
-                    strict_false_negatives += 1
+    log_final_metrics(logger, relaxed_metrics, strict_metrics, metrics_all, folder_to_f1)
 
-                    strict_fp += false_positives
-                    strict_fn += false_negatives
+def update_metrics(metrics_all, all_corrects, all_fns, all_fps):
+    for key in metrics_all.keys():
+        metrics_all[key]["correct"] += all_corrects[key]
+        metrics_all[key]["fn"] += all_fns[key]
+        metrics_all[key]["fp"] += all_fps[key]
 
+def update_sample_metrics(sample_metrics, f1, precision, recall):
+    sample_metrics["f1"].append(f1)
+    sample_metrics["precision"].append(precision)
+    sample_metrics["recall"].append(recall)
 
-            if len(true_jsons) > len(samples) and len(samples) > 0:
-                relaxed_f1_per_sample += [0] * (len(true_jsons) - len(samples))
-                relaxed_precision_per_sample += [0] * (len(true_jsons) - len(samples))
-                relaxed_recall_per_sample += [0] * (len(true_jsons) - len(samples))
+def update_global_metrics(corrects, fps, fns, strict_corrects, strict_fps, strict_fns):
+    global relaxed_correct, relaxed_fp, relaxed_fn, strict_correct, strict_fp, strict_fn
+    relaxed_correct += corrects
+    relaxed_fp += fps
+    relaxed_fn += fns
+    if fps == 0 and fns == 0:
+        strict_correct += 1
+    else:
+        strict_fp += fps
+        strict_fn += fns
 
-                relaxed_fn += 3 * (len(true_jsons) - len(samples))
+def update_article_metrics(relaxed_metrics, sample_metrics, true_count, sample_count, matches, metrics_all, all_fns, all_fps):
+    global relaxed_f1_per_article, relaxed_precision_per_article, relaxed_recall_per_article
+    global strict_f1_per_article, strict_precision_per_article, strict_recall_per_article, folder_to_f1
 
-                strict_false_negatives += len(true_jsons) - len(samples)   
+    # Calculate and append article-level metrics for relaxed evaluation
+    article_f1 = sum(sample_metrics['f1']) / len(sample_metrics['f1']) if sample_metrics['f1'] else 0
+    article_precision = sum(sample_metrics['precision']) / len(sample_metrics['precision']) if sample_metrics['precision'] else 0
+    article_recall = sum(sample_metrics['recall']) / len(sample_metrics['recall']) if sample_metrics['recall'] else 0
+    
+    relaxed_metrics['f1'].append(article_f1)
+    relaxed_metrics['precision'].append(article_precision)
+    relaxed_metrics['recall'].append(article_recall)
+    
+    # Calculate and append article-level metrics for strict evaluation
+    strict_f1, strict_precision, strict_recall = scores(strict_correct, strict_fp, strict_fn)
+    strict_metrics['f1'].append(strict_f1)
+    strict_metrics['precision'].append(strict_precision)
+    strict_metrics['recall'].append(strict_recall)
+    
+    folder_to_f1[file_name] = strict_f1
 
-                strict_fn += len(true_jsons) - len(samples)      
+def log_final_metrics(logger, relaxed_metrics, strict_metrics, metrics_all, folder_to_f1):
+    # Log macro relaxed and strict metrics
+    logger.info(f"Macro Relaxed F1: {sum(relaxed_metrics['f1']) / len(relaxed_metrics['f1'])}")
+    logger.info(f"Macro Relaxed Precision: {sum(relaxed_metrics['precision']) / len(relaxed_metrics['precision'])}")
+    logger.info(f"Macro Relaxed Recall: {sum(relaxed_metrics['recall']) / len(relaxed_metrics['recall'])}")
 
-                for key in all_fns:
-                    my_all_fns[key] += 1 * (len(true_jsons) - len(samples))    
+    logger.info(f"Macro Strict F1: {sum(strict_metrics['f1']) / len(strict_metrics['f1'])}")
+    logger.info(f"Macro Strict Precision: {sum(strict_metrics['precision']) / len(strict_metrics['precision'])}")
+    logger.info(f"Macro Strict Recall: {sum(strict_metrics['recall']) / len(strict_metrics['recall'])}")
 
-            elif len(true_jsons) > len(samples) and len(samples) == 0:
-
-                relaxed_f1_per_sample += [0] * len(true_jsons)
-                relaxed_precision_per_sample += [0] * len(true_jsons)
-                relaxed_recall_per_sample += [0] * len(true_jsons)
-
-                relaxed_fn += 3 * len(true_jsons)
-
-                strict_false_negatives += len(true_jsons)
-
-                strict_fn += len(true_jsons)
-
-                for key in my_all_fns:
-                    my_all_fns[key] += 1 * len(true_jsons)
-
-            if len(true_jsons) < len(samples):
-                relaxed_f1_per_sample += [0] * (len(samples) - len(true_jsons))
-                relaxed_precision_per_sample += [0] * (len(samples) - len(true_jsons))
-                relaxed_recall_per_sample += [0] * (len(samples) - len(true_jsons))
-
-                relaxed_fp += 3 * (len(samples) - len(true_jsons))
-
-                strict_false_positives += len(samples) - len(true_jsons)
-
-                strict_fp += len(samples) - len(true_jsons)
-
-                for key in all_fps:
-                    my_all_fps[key] += 1 * (len(samples) - len(true_jsons))
-            
-            relaxed_f1_per_article.append(sum(relaxed_f1_per_sample) / len(relaxed_f1_per_sample))
-            relaxed_precision_per_article.append(sum(relaxed_precision_per_sample) / len(relaxed_precision_per_sample))
-            relaxed_recall_per_article.append(sum(relaxed_recall_per_sample) / len(relaxed_recall_per_sample))
-
-            strict_f1, strict_precision, strict_recall = scores(strict_corrects, strict_false_positives, strict_false_negatives)
-            strict_f1_per_article.append(strict_f1)
-            folder_to_f1[file_name] = strict_f1
-            strict_precision_per_article.append(strict_precision)
-            strict_recall_per_article.append(strict_recall)
-
-    logger.info(f"number of articles: {len(relaxed_f1_per_article)}")
-
-    logger.info(f"macro relaxed sample-level: {sum(relaxed_f1_per_article) / len(relaxed_f1_per_article)}")
-    logger.info(f"macro relaxed precision: {sum(relaxed_precision_per_article) / len(relaxed_precision_per_article)}")
-    logger.info(f"macro relaxed recall: {sum(relaxed_recall_per_article) / len(relaxed_recall_per_article)}")
-
-    logger.info(f"macro strict sample-level: {sum(strict_f1_per_article) / len(strict_f1_per_article)}")
-    logger.info(f"macro strict precision: {sum(strict_precision_per_article) / len(strict_precision_per_article)}")
-    logger.info(f"macro strict recall: {sum(strict_recall_per_article) / len(strict_recall_per_article)}")
-
+    # Log micro metrics
     micro_relaxed_f1, micro_relaxed_precision, micro_relaxed_recall = scores(relaxed_correct, relaxed_fp, relaxed_fn)
-    logger.info(f"micro relaxed sample-level: {micro_relaxed_f1}")
-    logger.info(f"micro relaxed precision: {micro_relaxed_precision}")
-    logger.info(f"micro relaxed recall: {micro_relaxed_recall}")
-
     micro_strict_f1, micro_strict_precision, micro_strict_recall = scores(strict_correct, strict_fp, strict_fn)
-    logger.info(f"micro strict sample-level: {micro_strict_f1}")
-    logger.info(f"micro strict precision: {micro_strict_precision}")
-    logger.info(f"micro strict recall: {micro_strict_recall}")
 
-    logger.info(f"my_all_corrects: {my_all_corrects}")
-    logger.info(f"my_all_fns: {my_all_fns}")
-    logger.info(f"my_all_fps: {my_all_fps}")
+    logger.info(f"Micro Relaxed F1: {micro_relaxed_f1}")
+    logger.info(f"Micro Relaxed Precision: {micro_relaxed_precision}")
+    logger.info(f"Micro Relaxed Recall: {micro_relaxed_recall}")
 
-    # get precision recall and f1 for each entity
-    for key in my_all_corrects:
-        f1, precision, recall = scores(my_all_corrects[key], my_all_fps[key], my_all_fns[key])
-        logger.info(f"{key}: f1: {f1}, precision: {precision}, recall: {recall}")
+    logger.info(f"Micro Strict F1: {micro_strict_f1}")
+    logger.info(f"Micro Strict Precision: {micro_strict_precision}")
+    logger.info(f"Micro Strict Recall: {micro_strict_recall}")
+
+    # Log metrics for each entity type
+    for key, value in metrics_all.items():
+        entity_f1, entity_precision, entity_recall = scores(value["correct"], value["fp"], value["fn"])
+        logger.info(f"{key} - F1: {entity_f1}, Precision: {entity_precision}, Recall: {entity_recall}")
