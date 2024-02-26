@@ -8,8 +8,8 @@ import logging
 from standardize import standardize
 from parse_samples import load_unique_samples_from_pred_txt
 
-parser = argparse.ArgumentParser(description='Generate a prompt for a given paper and table.')
-parser.add_argument('--pred_json', type=str, help='Path to the paper file.')
+parser = argparse.ArgumentParser(description='Evaluate the predictions.')
+parser.add_argument('--pred_json', type=str, help='Path to the prediction folder.')
 
 args = parser.parse_args()
 

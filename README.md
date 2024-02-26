@@ -15,3 +15,7 @@ python articles/retrieve.py --topk 30 --min_similarity 0.55
 --topk: specifies the number of top retrieved segments. \
 --min_similarity: specifies the similarity threshold for retrieving segments.
 ## Evaluation
+To evaluate the predictions from a language model, run the following command:
+```
+python eval.py --pred_json <path_to_predictions_folder>
+```
