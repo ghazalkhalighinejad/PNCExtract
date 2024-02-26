@@ -90,7 +90,6 @@ if __name__ == "__main__":
     logger.info(f"{args}")
     pred_files = os.listdir(args.pred_json)
 
-    # Initialize counters and lists more concisely
     relaxed_fp = relaxed_fn = relaxed_correct = strict_fp = strict_fn = strict_correct = 0
     relaxed_metrics = strict_metrics = {"f1": [], "precision": [], "recall": []}
     folder_to_f1 = {}
