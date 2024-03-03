@@ -134,7 +134,8 @@ if __name__ == "__main__":
                         "chunk": chunk
                     })
 
-        with open(f"retrieved_chunks/{doc_id.split(".")[0]}.csv", "w") as f:
+        doc_id = doc_id.split(".")[0]
+        with open(f"retrieved_chunks/{doc_id}.csv", "w") as f:
             for query, chunks in selected_chunks.items():
                 for chunk in chunks:
                     f.write(f"{query}|||{chunk['chunk id']}|||{chunk['similarity']}|||{chunk['chunk']}\n")
