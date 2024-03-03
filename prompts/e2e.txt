@@ -1,0 +1,14 @@
+Please read the following paragraphs, find all the nano-composite samples, and then fill out the given JSON template for each one of those nanocomposite samples. If there are multiple Filler Composition Mass/Volume for a unique set of Matrix/Filler Chemical Name, please give a list for the Composition. If an attribute is not mentioned in the paragraphs fill that section with "null". Mass and Volume Composition should be followed by a %.
+
+{
+    "Matrix Chemical Name": "chemical_name",
+    "Matrix Chemical Abbreviation": "abbreviation",
+    "Filler Chemical Name": "chemical_name",
+    "Filler Chemical Abbreviation": "abbreviation",
+    "Filler Composition Mass": "mass_value",
+    "Filler Composition Volume": "volume_value"
+}
+
+
+[PAPER SPLIT]
+

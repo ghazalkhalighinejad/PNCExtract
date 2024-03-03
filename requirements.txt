@@ -1,0 +1,17 @@
+en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.6.0/en_core_web_sm-3.6.0-py3-none-any.whl#sha256=83276fc78a70045627144786b52e1f2728ad5e29e5e43916ec37ea9c26a11212
+munkres==1.1.4
+numpy==1.25.2
+openai==1.9.0
+regex==2023.12.25
+spacy==3.6.1
+tensorflow==2.15.0.post1
+tensorflow-hub==0.16.1
+tensorflow-metadata==1.14.0
+tensorflow-text==2.15.0
+tokenization==1.0.7
+tokenizers==0.15.1
+torch==2.2.0
+torch-geometric==2.3.1
+torch-scatter==2.1.1+pt20cu118
+torchaudio==2.2.0
+torchvision==0.17.0
