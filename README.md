@@ -20,8 +20,14 @@ python retrieve.py --topk 30 --min_similarity 0.55
 ## Generation with LLM
 To generate samples, you will need to run the following command:
 ```
-cd articles
-python generate.py --prompt_path <path_to_prompt_text> --output_path <path_to_predictions_folder> --tempreture <model_tepreture> --full_or_condensed full --model_type gpt --model_path <path_to_llm> --api_key <openai_api_key> --topk 30
+python generate.py --prompt_path <path_to_prompt_text> \
+    --output_path <path_to_predictions_folder> \
+    --tempreture <model_tepreture> \
+    --full_or_condensed full \
+    --model_type gpt \
+    --model_path <path_to_llm> \
+    --api_key <openai_api_key> \
+    --topk 30
 ```
 --prompt_path: Specifies the path to the user prompt text. \
 --output_path: Specifies the path to the folder where the predictions will be stored. \
