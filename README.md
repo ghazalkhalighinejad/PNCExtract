@@ -1,5 +1,7 @@
 # PNCExtract
 The official repository for "Extracting Polymer Nanocomposite Samples from Full-Length Documents"
+## Installation
+You can install all the required packages by running ```pip install -r requirements.txt```.
 ## Dataset
 The sample_data folder contains a manually curated list of samples for each PNC article. The data is divided into 52 validation articles and 151 test articles. Each article is assigned an ID in the format of L{id}. The subfolders in sample_data/val and sample_data/test correspond to the sample data of the respective article with the same L{id}.
 
