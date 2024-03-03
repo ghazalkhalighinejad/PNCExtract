@@ -134,6 +134,10 @@ if __name__ == "__main__":
                         "similarity": similarity,
                         "chunk": chunk
                     })
+            
+        # make retrieved_chunks if it doesn't exist
+        if not os.path.exists("retrieved_chunks"):
+            os.makedirs("retrieved_chunks")
 
         doc_id = doc_id.split(".")[0]
         with open(f"retrieved_chunks/{doc_id}.csv", "w") as f:
