@@ -21,8 +21,5 @@ def generate_prompt(prompt_file, paper_txt, paper_shot_txt = None, candid_sample
         prompt = prompt.replace("[PAPER SPLIT SHOT1]", paper_shot_txt)
         
     prompt = prompt.replace("[PAPER SPLIT]", paper_txt)
-
-    if args.type_prompt == 're':
-        prompt = prompt.replace("[JSON OBJECT]", json.dumps(candid_sample))
    
     return prompt

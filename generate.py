@@ -41,7 +41,7 @@ def generate_with_openai():
         elif args.full_or_condensed == 'retrieved':
             article_path = f'articles/retrieval/ret_articles_top{args.topk}/{folder}.txt'
         
-        if folder not in os.listdir("data_json/dataset/test"):
+        if folder not in os.listdir("sample_data/test"):
             continue
             
         else:
@@ -102,7 +102,7 @@ def generate_with_llama():
 
     for folder in os.listdir('articles/all'):
         
-        if not os.path.exists(f'data_json/dataset/test/{folder}'):
+        if not os.path.exists(f'sample_data/test/{folder}'):
             continue
 
         if args.full_or_condensed == 'full':
@@ -117,7 +117,7 @@ def generate_with_llama():
             conv = get_conversation_template("llama-2")
             with open(article_path, 'r') as file:
                 data = file.read()
-                input_context = generate_prompt("prompts/end2end/comprehensive_matrix_prompt2.txt", data)
+                input_context = generate_prompt(args.prompt_path, data)
                 conv.append_message(conv.roles[0], input_context)
                 conv.append_message(conv.roles[1], None)
                 prompt = conv.get_prompt()
@@ -134,7 +134,7 @@ def generate_with_llama():
             conv = get_conversation_template("vicuna")
             with open(article_path, 'r') as file:
                 data = file.read()
-                input_context = generate_prompt("prompts/end2end/comprehensive_matrix_prompt2.txt", data)
+                input_context = generate_prompt(args.prompt_path, data)
                 conv.append_message(conv.roles[0], input_context)
                 conv.append_message(conv.roles[1], None)
                 prompt = conv.get_prompt()
@@ -149,7 +149,7 @@ def generate_with_llama():
             conv = get_conversation_template("vicuna")
             with open(article_path, 'r') as file:
                 data = file.read()
-                input_context = generate_prompt("prompts/end2end/comprehensive_matrix_prompt2.txt", data)
+                input_context = generate_prompt(args.prompt_path, data)
                 conv.append_message(conv.roles[0], input_context)
                 conv.append_message(conv.roles[1], None)
                 prompt = conv.get_prompt()
