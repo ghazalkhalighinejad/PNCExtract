@@ -1,5 +1,5 @@
 # PNCExtract
-The official repository for "Extracting Polymer Nanocomposite Samples from Full-Length Documents"
+This repository contains the dataset and code described in "[Extracting Polymer Nanocomposite Samples from Full-Length Documents](https://arxiv.org/abs/2403.00260)" by Ghazal Khalighinejad, Defne Circi, L. Brinson, and Bhuwan Dhingra to appear in findings of ACL 2024.
 ## Installation
 You can install all the required packages by running ```pip install -r requirements.txt```.
 ## Dataset
